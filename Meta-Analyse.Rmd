@@ -1,0 +1,292 @@
+---
+title: "Meta-Analyse"
+author: "Anna Broschke"
+date: "16 5 2021"
+output: html_document
+---
+
+```{r setup22 , warning=FALSE}
+#Laden der Pfade
+source("init.R")
+
+#source("R_function_meta_analysis.R")
+source("R_function_meta_analysis-2.R")
+source("R_function_meta_analysis-3.R")
+
+## load R functions
+source(file.path(skript.dir, "functions.R"))
+
+#Eingabe aller beteiligten Studien
+studien.names <- c("GSE54456-GSE63979",
+                   "GSE67785",
+                   "GSE117239",
+                   "E-MTAB-6556",
+                   "GSE6710",#
+                   "GSE11903",
+                   "GSE14905",
+                   "GSE30999",
+                   "GSE34248",
+                   "GSE41662",
+                   "GSE41663",
+                   "GSE51440",#
+                   "GSE53552",
+                   "GSE69967",
+                   "GSE75343",
+                   "GSE106992",
+                   "GSE121212"
+                   )
+
+```
+
+```{r  ladendiff.ex}
+
+#laden der Differenzierten Expressionsanalyse
+dif.ex.files = file.path(res.dir,
+                     paste0("res_diff_expr_",studien.names,
+                            ".csv"))
+
+#Speichern dieser in einer Liste
+diff.ex.l <-  load.csv(csv.files = dif.ex.files)
+
+```
+
+```{r downsample , eval=FALSE, include=FALSE}
+
+## extract first 100 genes (only to be used for this example!!!)
+## to reduce run time of differential expression analysis
+diff.ex.l.red = lapply(diff.ex.l, function(x) {x[1:50,]})
+
+
+
+```
+
+```{r metaanalyse , warning=TRUE, eval=FALSE}
+
+#Durchführen der Meta-Analyse mit samt der übergabe des rma.uni des genes ENSG00000136152, da kleinster P-Wert
+res.random.p <- run_meta_analysis_2(res.studies = diff.ex.l, 
+                  freq.studies = 0.5,
+                  res.file=file.path(met.dir, "meta_analyse.txt")) 
+  
+
+
+```
+
+
+```{r methladen}
+
+#Laden der Meta-Analyse ergebnisse
+meta <- import(file.path(met.dir, "meta_analyse.txt"))
+
+#Ornen dieser anhand des P-Wertes
+meta_order <- meta[order(meta$pvalue.random.adj ),]
+
+#Subframe der signifikanten P-Werte und abspeichern dieser
+meta_signifikant <- meta[meta$pvalue.random.adj < 0.05,]
+export(meta_signifikant, 
+       file = file.path(met.dir, "meta_analyse_signifikant.txt"))
+  
+#Subframe der Gene mit abnoluten logFC größer 1 und abspeichern dieser
+meta_fc <- meta[abs(meta$estimate.random)>1,]
+export(meta_fc,file = file.path(met.dir, "meta_fc.txt") )
+
+meta_fc_sig <- meta_fc[meta_fc$pvalue.random.adj <0.05,]
+
+signifikannte_gesammt <- meta_signifikant$gene
+
+```
+
+```{r histplot}
+
+#Erzeugen verschiedener Grafiken zur Untersuchung und abspeichern dieser
+
+p.meta <- ggplot(meta_signifikant)+geom_histogram(aes(x=pvalue.random),fill="grey80",colour="black") +
+  labs(x="unadjustierter P-Wert", y= "Häufigkeit")+theme_few() 
+
+p.meta
+
+pdf(file.path(bild.dir, "Meta_p_hist.pdf"))
+ggplot(meta_signifikant)+geom_histogram(aes(x=pvalue.random),fill="grey80",colour="black") +
+  labs(x="unadjustierter P-Wert", y= "Häufigkeit")+theme_few() 
+dev.off()
+
+
+ggplot(meta_signifikant)+geom_histogram(aes(x=I2),fill="grey80",colour="black") + theme_few()+
+  labs(x="I2", y= "Häufigkeit")
+
+pdf(file.path(bild.dir, "Meta_I2_hist.pdf"))
+ggplot(meta_signifikant)+geom_histogram(aes(x=I2),fill="grey80",colour="black") + theme_few()+
+  labs(x="I2", y= "Häufigkeit")
+dev.off()
+
+
+ggplot(meta_signifikant)+geom_histogram(aes(x=pvalue.Q),fill="grey80",colour="black") + theme_few()+ 
+  labs(x="P-Wert der Q-Statistik", y= "Häufigkeit")
+
+pdf(file.path(bild.dir, "Meta_Qp_hist.pdf"))
+ggplot(meta_signifikant)+geom_histogram(aes(x=pvalue.Q),fill="grey80",colour="black") + theme_few()+ 
+  labs(x="P-Wert der Q-Statistik", y= "Häufigkeit")
+dev.off()
+
+#pdf(file.path(bild.dir,"hetero.pdf"))
+init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+              hist( meta$I2, main = NULL,
+                xlab = "I2",
+                ylab = "Häufigkeit")
+              hist( meta$pvalue.Q, main = NULL,
+                xlab = "P-Wert der Q-Statistik",
+                ylab = "Häufigkeit")
+              
+            
+par(init)
+#dev.off()
+
+
+
+
+```
+
+```{r vulcano22}
+#Erzeugen vulcanoplot
+
+volcano.plot.meta <- function(data_ges, log.p = TRUE, log.fc = FALSE, genes.sel = NULL) {
+  data = data_ges[,c("gene","pvalue.random","estimate.random")]
+  colnames(data) <- c("id","p","fc")
+  if (log.p) data$p = -log10(data$p)
+  if (log.fc) data$fc = log2(data$fc)
+  
+ plot(data$fc, data$p, pch = 1, 
+       xlab = "logFC",
+       ylab = "-log10(P-Wert) unadjustiert")
+ if (!is.null(genes.sel)) {
+    points(subset(data, id %in% genes.sel, c("fc", "p")),
+           pch = 19, col = "red")
+  }
+}   
+volcano.plot.meta(meta)
+
+
+#pdf(file.path(bild.dir, "Meta_vulcano_p.pdf"))
+for (i in 1:1) {
+  init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+              volcano.plot.meta(meta)
+              hist( meta$pvalue.random.adj, main = NULL,
+                xlab = "-log(P-Wert)",
+                ylab = "Häufigkeit")
+              
+            
+par(init)
+}
+
+#dev.off()
+
+```
+
+```{r Wichtige daten}
+#Anzahl gene insgesammt
+length(meta$gene)
+#Anzahl Gene signifikant
+length(meta_signifikant$gene)
+#Anteil logFC<0
+sum(meta$estimate.random<0)/length(meta$gene)
+
+sum(meta_signifikant$I2 >= 75)/length(meta_signifikant$gene)
+
+sum(meta$estimate.random<(-2))
+
+
+
+test <- meta[meta$estimate.random<(-2),]
+hist(test$pvalue.random.adj)
+hist(meta_order$pvalue.random.adj[1:10])
+
+#View(meta)
+```
+
+
+
+
+```{r forestplot, eval=FALSE}
+
+#Erzeugen Forrest plot von gen kleinster P-Wert
+h<- 1:length(diff.ex.l)
+for(i in 1:length(diff.ex.l)){
+  
+  h[i]<-"ENSG00000136152"%in%diff.ex.l[[i]]$gene
+  #ifelse(h[i],h[i]<- studien.names[i],0)
+  
+}
+
+meta_order$pvalue.random.adj[1]
+
+g.nam.for <- studien.names[complete.cases(ifelse(h, 1,NA))]
+
+
+
+#pdf(file.path(bild.dir, "forrest_meta_kl_p_2.pdf"))
+forest(res.random.p,header=c("Studien","logFC[95% KI]"), slab = g.nam.for, xlab = "logFC")
+text(-0.53, -1, pos=4, cex=0.75, bquote(paste("(Q = ",
+     .(formatC(res.random.p$QE, digits=2, format="f")), ", G = ", .(res.random.p$k - res.random.p$p),
+     ", p = ", .(formatC(res.random.p$QEp, digits=2, format="f")), "; ", I^2, " = ",
+     .(formatC(res.random.p$I2, digits=1, format="f")), "%)")))
+
+#dev.off()
+
+
+
+
+
+```
+
+```{r forresthet, eval=FALSE}
+
+meta_het <- meta_signifikant[order(meta_signifikant$I2, decreasing = TRUE),]
+meta_het[1,]
+"ENSG00000153292"
+
+res.random.I2 <- run_meta_analysis_3(res.studies = diff.ex.l, 
+                  freq.studies = 0.5,
+                  res.file=file.path(met.dir, "meta_analyse_I2.txt")) 
+
+b<- 1:length(diff.ex.l)
+for(i in 1:length(diff.ex.l)){
+  b[i]<-"ENSG00000153292"%in%diff.ex.l[[i]]$gene
+}
+
+
+g.nam.for.g <- studien.names[complete.cases(ifelse(b, 1,NA))]
+
+
+#pdf(file.path(bild.dir, "forrest_meta_I2.pdf"))
+forest(res.random.I2,header=c("Studien","logFC[95% KI]"), slab = g.nam.for.g, xlab = "logFC")
+text(-2, -1, pos=2, cex=0.75, bquote(paste("(Q = ",
+     .(formatC(res.random.I2$QE, digits=2, format="f")), ", G = ", .(res.random.I2$k - res.random.I2$p),
+     ", p = ", .(formatC(res.random.I2$QEp, digits=2, format="f")), "; ", I^2, " = ",
+     .(formatC(res.random.I2$I2, digits=1, format="f")), "%)")))
+#dev.off()
+
+
+```
+
+
+
+```{r iundp}
+
+#pdf(file.path(bild.dir, "I2_p_log.pdf"))
+ggplot(meta_signifikant, mapping=aes(y=pvalue.random.adj, x=I2))+geom_point(shape=1)+theme_few()+labs(y="adjustierter P-Wert")
+#+scale_y_log10()
+#dev.off()
+
+#pdf(file.path(bild.dir, "I2_p_reg.pdf"))
+ggscatter(meta_signifikant,"I2","pvalue.random.adj",shape = 1 ,add="loess",add.params =list( color="steelblue1"), ylab = "adjustierter P-Wert")
+#dev.off()
+
+````
+
+
+
+
+
+
+

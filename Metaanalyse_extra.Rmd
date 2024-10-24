@@ -1,0 +1,589 @@
+---
+title: "Meta_extra"
+author: "Anna Broschke"
+date: "26 7 2021"
+output: html_document
+---
+```{r setup2 , warning=FALSE}
+#Laden der Pfade
+source("init.R")
+
+source("R_function_meta_analysis.R")
+source("R_function_meta_analysis_back.R")
+source("function_heterogenitaet.R")
+
+
+## load R functions
+source(file.path(skript.dir, "functions.R"))
+
+
+#Eingabe aller beteiligten Studien
+microarrays.name <- c("GSE117239",
+                   "GSE6710",#
+                   "GSE11903",
+                   "GSE14905",
+                   "GSE30999",
+                   "GSE34248",
+                   "GSE41662",
+                   "GSE41663",
+                   "GSE51440",#
+                   "GSE53552",
+                   "GSE69967",
+                   "GSE75343",
+                   "GSE106992"
+                   )
+
+rnaseq.name <- c("E-MTAB-6556",
+            "GSE67785",
+            "GSE121212",
+            "GSE54456-GSE63979"
+            )
+
+```
+
+```{r  ladendiffexr}
+###Micrarray
+#laden der Differenzierten Expressionsanalyse
+dif.ex.microarray = file.path(res.dir,
+                     paste0("res_diff_expr_",microarrays.name,
+                            ".csv"))
+
+#Speichern dieser in einer Liste
+diff.ex.l.microarray <-  load.csv(csv.files = dif.ex.microarray)
+
+#View(diff.ex.l.microarray)
+
+#RNAseq
+#laden der Differenzierten Expressionsanalyse
+dif.ex.RNAseq = file.path(res.dir,
+                     paste0("res_diff_expr_",rnaseq.name,
+                            ".csv"))
+
+#Speichern dieser in einer Liste
+diff.ex.l.RNAseq <-  load.csv(csv.files = dif.ex.RNAseq)
+
+#View(diff.ex.l.RNAseq)
+```
+
+```{r metaanalyse, eval=FALSE}
+#Microarrays
+#Durchführen der Meta-Analyse mit samt der übergabe des rma.uni des genes ENSG00000136152, da kleinster P-Wert
+run_meta_analysis_2(res.studies = diff.ex.l.microarray, 
+                  freq.studies = 0.5,
+                  res.file=file.path(met.dir, "meta_analyse_microarrays.txt")) 
+
+run_meta_analysis_2(res.studies = diff.ex.l.RNAseq, 
+                  freq.studies = 0.5,
+                  res.file=file.path(met.dir, "meta_analyse_RNAseq.txt")) 
+  
+
+
+```
+
+```{r metaanalyseladen}
+
+
+#Laden der Meta-Analyse ergebnisse
+meta_microaary <- import(file.path(met.dir, "meta_analyse_microarrays.txt"))
+#Subframe der signifikanten P-Werte und abspeichern dieser
+meta_microaary_signifikant <- meta_microaary[meta_microaary$pvalue.random.adj < 0.05,]
+export(meta_microaary_signifikant, 
+       file = file.path(met.dir, "meta_analyse_microarray_signifikant.txt"))
+
+#Laden der Meta-Analyse ergebnisse
+meta_RNAseq <- import(file.path(met.dir, "meta_analyse_RNAseq.txt"))
+#Subframe der signifikanten P-Werte und abspeichern dieser
+meta_RNAseq_signifikant <- meta_RNAseq[meta_RNAseq$pvalue.random.adj < 0.05,]
+export(meta_RNAseq_signifikant, 
+       file = file.path(met.dir, "meta_analyse_RNAseq_signifikant.txt"))
+
+
+```
+
+```{r histplotmircroaarays}
+
+#Erzeugen verschiedener Grafiken zur Untersuchung und abspeichern dieser
+
+#pdf(file.path(bild.dir, "Meta_p_hist_microarrays.pdf"))
+ggplot(meta_microaary_signifikant)+geom_histogram(aes(x=pvalue.random),fill="grey80",colour="black") +
+  labs(x="unadjustierter P-Wert", y= "Häufigkeit")+theme_few() 
+#dev.off()
+
+
+#pdf(file.path(bild.dir, "Meta_I2_hist_microarrays.pdf"))
+ggplot(meta_microaary_signifikant)+geom_histogram(aes(x=I2),fill="grey80",colour="black") + theme_few()+
+  labs(x="I2", y= "Häufigkeit")
+#dev.off()
+
+
+#pdf(file.path(bild.dir, "Meta_Qp_hist_microarrays.pdf"))
+ggplot(meta_microaary_signifikant)+geom_histogram(aes(x=pvalue.Q),fill="grey80",colour="black") + theme_few()+ 
+  labs(x="P-Wert der Q-Statistik", y= "Häufigkeit")
+#dev.off()
+
+
+
+
+
+
+
+
+
+```
+
+```{r histplotRNAseq}
+
+#Erzeugen verschiedener Grafiken zur Untersuchung und abspeichern dieser
+
+#pdf(file.path(bild.dir, "Meta_p_hist_RNAseqs.pdf"))
+ggplot(meta_RNAseq_signifikant)+geom_histogram(aes(x=pvalue.random),fill="grey80",colour="black") +
+  labs(x="unadjustierter P-Wert", y= "Häufigkeit")+theme_few() 
+#dev.off()
+
+
+#pdf(file.path(bild.dir, "Meta_I2_hist_RNAseq.pdf"))
+ggplot(meta_RNAseq_signifikant)+geom_histogram(aes(x=I2),fill="grey80",colour="black") + theme_few()+
+  labs(x="I2", y= "Häufigkeit")
+#dev.off()
+
+
+#pdf(file.path(bild.dir, "Meta_Qp_hist_RNAseq.pdf"))
+ggplot(meta_RNAseq_signifikant)+geom_histogram(aes(x=pvalue.Q),fill="grey80",colour="black") + theme_few()+ 
+  labs(x="P-Wert der Q-Statistik", y= "Häufigkeit")
+#dev.off()
+
+#pdf(file.path(bild.dir,"hetero_microarray.pdf"))
+init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+              hist( meta_microaary$I2, main = NULL,
+                xlab = "I2",
+                ylab = "Häufigkeit")
+              hist( meta_microaary$pvalue.Q, main = NULL,
+                xlab = "P-Wert der Q-Statistik",
+                ylab = "Häufigkeit")
+              
+            
+par(init)
+#dev.off()
+
+#pdf(file.path(bild.dir,"hetero_RNAseq.pdf"))
+init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+              hist( meta_RNAseq$I2, main = NULL,
+                xlab = "I2",
+                ylab = "Häufigkeit")
+              hist( meta_RNAseq$pvalue.Q, main = NULL,
+                xlab = "P-Wert der Q-Statistik",
+                ylab = "Häufigkeit")
+              
+            
+par(init)
+#dev.off()
+
+```
+
+```{r vulcanoextra}
+#Erzeugen vulcanoplot
+
+volcano.plot.meta <- function(data_ges, log.p = TRUE, log.fc = FALSE, genes.sel = NULL) {
+  data = data_ges[,c("gene","pvalue.random","estimate.random")]
+  colnames(data) <- c("id","p","fc")
+  if (log.p) data$p = -log10(data$p)
+  if (log.fc) data$fc = log2(data$fc)
+  
+ plot(data$fc, data$p, pch = 1, 
+       xlab = "logFC",
+       ylab = "-log10(P-Wert) unadjustiert")
+ if (!is.null(genes.sel)) {
+    points(subset(data, id %in% genes.sel, c("fc", "p")),
+           pch = 19, col = "red")
+  }
+}   
+volcano.plot.meta(meta_microaary)
+volcano.plot.meta(meta_RNAseq)
+
+
+#pdf(file.path(bild.dir, "Meta_vulcano_p.pdf"))
+#for (i in 1:1) {
+#  init <- par(no.readonly=TRUE)
+#par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+#              volcano.plot.meta(meta)
+#              hist( meta$pvalue.random.adj, main = NULL,
+#                xlab = "-log(p-Wert)",
+#                ylab = "Häufigkeit")
+              
+            
+#par(init)
+#}
+
+#dev.off()
+
+#pdf(file.path(bild.dir, "Meta_vulcano_p_microarray.pdf"))
+for (i in 1:1) {
+  init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+              volcano.plot.meta(meta_microaary)
+              hist( meta_microaary$pvalue.random.adj, main = NULL,
+                xlab = "-log(P-Wert)",
+                ylab = "Häufigkeit")
+              
+            
+par(init)
+}
+#dev.off()
+
+#pdf(file.path(bild.dir, "Meta_vulcano_p_RNAseq.pdf"))
+for (i in 1:1) {
+  init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+              volcano.plot.meta(meta_RNAseq)
+              hist( meta_RNAseq$pvalue.random.adj, main = NULL,
+                xlab = "-log(P-Wert)",
+                ylab = "Häufigkeit")
+              
+            
+par(init)
+}
+#dev.off()
+
+
+```
+
+```{r Wichtige_daten_extra}
+#Anzahl gene insgesammt
+length(meta_microaary$gene)
+length(meta_RNAseq$gene)
+
+#Anzahl Gene signifikant
+length(meta_microaary_signifikant$gene)
+length(meta_RNAseq_signifikant$gene)
+
+length(meta_RNAseq_signifikant$gene)/length(meta_RNAseq$gene)
+
+#Anteil logFC<0
+sum(meta_microaary$estimate.random<0)/length(meta_microaary$gene)
+sum(meta_RNAseq$estimate.random<0)/length(meta_RNAseq$gene)
+
+sum(meta_microaary_signifikant$I2 >= 75)/length(meta_microaary_signifikant$gene)
+sum(meta_RNAseq_signifikant$I2 >= 75)/length(meta_RNAseq_signifikant$gene)
+
+sum(meta_microaary$estimate.random<(-2))
+sum(meta_RNAseq$estimate.random<(-5))
+
+sum(meta_microaary_signifikant$I2 <= 25)/length(meta_microaary_signifikant$gene)
+sum(meta_RNAseq_signifikant$I2 <= 25)/length(meta_RNAseq_signifikant$gene)
+
+```
+
+#Forrestplot
+```{r forestmicroarr, eval=FALSE}
+
+meta_order_microarray <- meta_microaary[order(meta_microaary$pvalue.random.adj ),]
+kp_microarry <- meta_order_microarray[1,1]
+
+re.microarray.klp <- run_meta_analysis_back(
+                            res.studies = diff.ex.l.microarray, 
+                            freq.studies = 0.5,
+                            res.file=file.path(met.dir, "meta_analyse_microarrays.txt"),
+                            returngene= kp_microarry) 
+
+
+
+meta_het_microarray <- meta_microaary_signifikant[order(meta_microaary_signifikant$I2, decreasing = TRUE),]
+gi2_microarray<-meta_het_microarray[1,1]
+#ENSG00000153292
+
+re.microarray.gi2 <- run_meta_analysis_back(
+                            res.studies = diff.ex.l.microarray, 
+                            freq.studies = 0.5,
+                            res.file=file.path(met.dir,"meta_analyse_microarrays_i2.txt"),
+                            returngene= gi2_microarray) 
+
+
+#######################Zeichnen
+gene_in_kpl<- 1:length(diff.ex.l.microarray)
+for(i in 1:length(diff.ex.l.microarray)){
+  gene_in_kpl[i]<-kp_microarry%in%diff.ex.l.microarray[[i]]$gene
+}
+
+
+
+g.nam.microarray.kp <- microarrays.name[complete.cases(ifelse(gene_in_kpl, 1,NA))]
+
+
+#pdf(file.path(bild.dir, "forrest_meta_microarray_kp.pdf"))
+forest(re.microarray.klp,header=c("Studien","logFC[95% KI]") ,slab = g.nam.microarray.kp, xlab = "logFC")
+text(-0.04, -1.75, pos=2, cex=0.75, bquote(paste("(Q = ",
+     .(formatC(re.microarray.klp$QE, digits=2, format="f")), ", G = ", .(re.microarray.klp$k - re.microarray.klp$p),
+     ", p = ", .(formatC(re.microarray.klp$QEp, digits=2, format="f")), "; ", I^2, " = ",
+     .(formatC(re.microarray.klp$I2, digits=1, format="f")), "%)")))
+#dev.off()
+
+
+gene_in_i2<- 1:length(diff.ex.l.microarray)
+for(i in 1:length(diff.ex.l.microarray)){
+  gene_in_i2[i]<-gi2_microarray%in%diff.ex.l.microarray[[i]]$gene
+}
+
+
+
+g.nam.microarray.i2 <- microarrays.name[complete.cases(ifelse(gene_in_i2, 1,NA))]
+
+
+#pdf(file.path(bild.dir, "forrest_meta_I2.pdf"))
+forest(re.microarray.gi2,header=c("Studien","logFC[95% KI]") ,slab = g.nam.microarray.i2, xlab = "logFC")
+text(-0.44, -1.7, pos=2, cex=0.75, bquote(paste("(Q = ",
+     .(formatC(re.microarray.gi2$QE, digits=2, format="f")), ", G = ", .(re.microarray.gi2$k - re.microarray.gi2$p),
+     ", p = ", .(formatC(re.microarray.gi2$QEp, digits=2, format="f")), "; ", I^2, " = ",
+     .(formatC(re.microarray.gi2$I2, digits=1, format="f")), "%)")))
+#dev.off()
+
+```
+
+
+```{r forrestRNAseq, eval=FALSE}
+meta_order_RNAseq <- meta_RNAseq[order(meta_RNAseq$pvalue.random.adj ),]
+gen_rnaseq_kp <- meta_order_RNAseq[1,1]
+
+
+
+re.rnaseq.klp <- run_meta_analysis_back(
+                            res.studies = diff.ex.l.RNAseq, 
+                            freq.studies = 0.5,
+                            res.file=file.path(met.dir, "meta_analyse_RNAseq.txt"),
+                            returngene= gen_rnaseq_kp) 
+
+
+
+meta_het_RNAseq <- meta_RNAseq_signifikant[order(meta_RNAseq_signifikant$I2, decreasing = TRUE),]
+gi2_RNAseq<-meta_het_RNAseq[1,1]
+#ENSG00000153292
+
+re.rnaseq.gi2 <- run_meta_analysis_back(
+                            res.studies = diff.ex.l.RNAseq, 
+                            freq.studies = 0.5,
+                            res.file=file.path(met.dir,"meta_analyse_RNAseq.txt"),
+                            returngene= gi2_RNAseq) 
+
+
+#######################Zeichnen
+gene_in_kpl_rnaseq<- 1:length(diff.ex.l.RNAseq)
+for(i in 1:length(diff.ex.l.RNAseq)){
+  gene_in_kpl_rnaseq[i]<-gen_rnaseq_kp%in%diff.ex.l.RNAseq[[i]]$gene
+}
+
+
+
+g.nam.rnaseq.kp <- rnaseq.name[complete.cases(ifelse(gene_in_kpl_rnaseq, 1,NA))]
+
+
+#pdf(file.path(bild.dir, "forrest_meta_RNAseq_kp.pdf"))
+forest(re.rnaseq.klp,header=c("Studien","logFC[95% KI]") ,slab = g.nam.rnaseq.kp, xlab = "logFC")
+text(-8, -1.5, pos=2, cex=0.75, bquote(paste("(Q = ",
+     .(formatC(re.rnaseq.klp$QE, digits=2, format="f")), ", G = ", .(re.rnaseq.klp$k - re.rnaseq.klp$p),
+     ", p = ", .(formatC(re.rnaseq.klp$QEp, digits=2, format="f")), "; ", I^2, " = ",
+     .(formatC(re.rnaseq.klp$I2, digits=1, format="f")), "%)")))
+#dev.off()
+
+#################
+gene_in_i2_rnaseq<- 1:length(diff.ex.l.RNAseq)
+for(i in 1:length(diff.ex.l.RNAseq)){
+  gene_in_i2_rnaseq[i]<-gi2_microarray%in%diff.ex.l.RNAseq[[i]]$gene
+}
+
+
+
+g.nam.rnaseq.i2 <- rnaseq.name[complete.cases(ifelse(gene_in_i2_rnaseq, 1,NA))]
+
+
+#pdf(file.path(bild.dir, "forrest_meta_I2_RNAseq.pdf"))
+forest(re.rnaseq.gi2,header=c("Studien","logFC[95% KI]") ,slab = g.nam.rnaseq.i2, xlab = "logFC")
+text(0.4, -1.5, pos=2, cex=0.75, bquote(paste("(Q = ",
+     .(formatC(re.rnaseq.gi2$QE, digits=2, format="f")), ", G = ", .(re.rnaseq.gi2$k - re.rnaseq.gi2$p),
+     ", p = ", .(formatC(re.rnaseq.gi2$QEp, digits=2, format="f")), "; ", I^2, " = ",
+     .(formatC(re.rnaseq.gi2$I2, digits=1, format="f")), "%)")))
+#dev.off()
+
+```
+
+
+```{sigg}
+
+# Gene aus jeder Studie die P-Wert <0.05
+signifikante_gene_microarray <- as.data.frame(sig_raus_stud(diff.ex.l.microarray,meta_microaary, meta_microaary$gene[meta_microaary$pvalue.random.adj<0.05]))
+
+```
+
+```{r m_microarray, eval=FALSE}
+
+#Berechnen der Unkorrelierten M-Statistik
+mstatistic_microarray <- getmstatistic(
+                            beta_in = as.numeric(signifikante_gene_microarray$logFC),
+                            lambda_se_in = as.numeric(signifikante_gene_microarray$SE),
+                            study_names_in = signifikante_gene_microarray$gene,
+                            variant_names_in = signifikante_gene_microarray$studie.name
+    
+  )
+#exportieren der entstandenen Dataframes
+m_data_microarray <- mstatistic_microarray$M_dataset
+#colnames(m_data)
+export(m_data_microarray,file = file.path(m.dir,"m_data_microarray.csv"))
+
+
+```
+
+
+
+```{r sig}
+# Gene aus jeder Studie die P-Wert <0.05
+signifikante_gene_RNAseq <- as.data.frame(sig_raus_stud(diff.ex.l.RNAseq,meta_RNAseq, meta_RNAseq$gene[meta_RNAseq$pvalue.random.adj<0.05]))
+```
+
+```{r m_RNAseq,eval=FALSE}
+#Berechnen der Unkorrelierten M-Statistik
+mstatistic_RNAseq <- getmstatistic(
+                            beta_in = as.numeric(signifikante_gene_RNAseq$logFC),
+                            lambda_se_in = as.numeric(signifikante_gene_RNAseq$SE),
+                            study_names_in = signifikante_gene_RNAseq$gene,
+                            variant_names_in = signifikante_gene_RNAseq$studie.name
+    
+  )
+#exportieren der entstandenen Dataframes
+m_data_RNAseq <- mstatistic_RNAseq$M_dataset
+#colnames(m_data)
+export(m_data_RNAseq,file = file.path(m.dir,"m_data_RNAseq.csv"))
+
+
+```
+
+
+```{r importextra}
+
+#laden der unkorreliertn M-statistik
+
+m_data_microarray <- import(file.path(m.dir, "m_data_microarray.csv"))
+
+m_data_RNAseq <- import(file.path(m.dir, "m_data_RNAseq.csv"))
+
+
+
+```
+
+
+```{r zeichnenmextra}
+
+
+
+
+#Zeichnen der unkorrelierten M-Statistik mit einfluss der Technologie
+
+thershhold_microarray <- length(unique(m_data_microarray$variant_names_in))
+thershhold_RNAseq <- length(unique(m_data_RNAseq$variant_names_in))
+grenze_microarray <- qnorm(0.025/13, 0, sqrt(1/thershhold_microarray))
+grenze_RNAseq <- qnorm(0.025/4, 0, sqrt(1/thershhold_RNAseq))
+
+
+#pdf(file.path(bild.dir, "M_microarray.pdf"))
+ggplot(m_data_microarray, mapping=aes(y=M,x=reorder(study_names_in,M)))+geom_point(col="steelblue1")+theme_few() +
+  geom_hline(yintercept=grenze_microarray)+geom_hline(yintercept=-grenze_microarray)+
+  theme(axis.text.x = element_text(size = 8)) +labs(x  = "Studien")+
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#dev.off()
+
+#pdf(file.path(bild.dir, "M_RNAseq.pdf"))
+ggplot(m_data_RNAseq, mapping=aes(y=M,x=reorder(study_names_in,M)))+geom_point(col="indianred4")+theme_few() +
+ # geom_hline(yintercept=grenze_RNAseq)+geom_hline(yintercept=-grenze_RNAseq)+
+  theme(axis.text.x = element_text(size = 8)) +labs(x  = "Studien")+
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#dev.off()
+
+```
+```{r korrellation_microarray, eval =FALSE}
+
+korrelations_mat_microarray <- matrix( 1:((length(diff.ex.l.microarray))*(length(meta_microaary$gene))), ncol = length(meta_microaary$gene),byrow = TRUE)
+
+for (g in 1:length(meta_microaary$gene)) {
+  for (s in 1:length(diff.ex.l.microarray)) {
+    if(meta_microaary$gene[g]%in%diff.ex.l.microarray[[s]]$gene){
+      korrelations_mat_microarray[s,g] <- diff.ex.l.microarray[[s]][diff.ex.l.microarray[[s]]$gene%in%meta_microaary$gene[g],]$logFC
+    }
+    else{
+      korrelations_mat_microarray[s,g] <- NA
+    }
+  }
+  
+}
+
+
+#korrelations_mat[1,1] <- diff.ex.l[[1]][diff.ex.l[[1]]$gene%in%meta$gene[1],]$logFC
+
+korrelation_ges_microarray <- cor(korrelations_mat_microarray, use = "pairwise.complete.obs")
+#zu groß für meinen Rechner, deshalb vergleinern der Daten mit großen logFC>1
+#head(korrelations_mat)
+corrplot(korrelation_ges_microarray,tl.pos = FALSE)
+############################################################################
+
+korrelations_mat_RNAseq <- matrix( 1:((length(diff.ex.l.RNAseq))*(length(meta_RNAseq$gene))), ncol = length(meta_RNAseq$gene),byrow = TRUE)
+
+for (g in 1:length(meta_RNAseq$gene)) {
+  for (s in 1:length(diff.ex.l.RNAseq)) {
+    if(meta_RNAseq$gene[g]%in%diff.ex.l.RNAseq[[s]]$gene){
+      korrelations_mat_RNAseq[s,g] <- diff.ex.l.RNAseq[[s]][diff.ex.l.RNAseq[[s]]$gene%in%meta_RNAseq$gene[g],]$logFC
+    }
+    else{
+      korrelations_mat_RNAseq[s,g] <- NA
+    }
+  }
+  
+}
+
+
+#korrelations_mat[1,1] <- diff.ex.l[[1]][diff.ex.l[[1]]$gene%in%meta$gene[1],]$logFC
+
+
+korrelation_ges_RNAseq <- cor(korrelations_mat_RNAseq, use = "pairwise.complete.obs")
+#zu groß für meinen Rechner, deshalb vergleinern der Daten mit großen logFC>1
+#head(korrelations_mat)
+corrplot(korrelation_ges_RNAseq,tl.pos = FALSE)
+
+```
+
+```{r venndiagramm,eval=FALSE}
+library(VennDiagram)
+signifikante_gene_RNAseq <- meta_RNAseq_signifikant$gene
+signifikante_gene_microarray <- meta_microaary_signifikant$gene
+
+Anzahl_gesammt <- length(signifikannte_gesammt)
+Anzahl_RNAseq <- length(signifikante_gene_RNAseq)
+Anzahhl_microarray <- length(signifikante_gene_microarray)
+
+gene_RNAseq_micrarray <- signifikante_gene_microarray[ signifikante_gene_microarray%in%signifikante_gene_RNAseq]
+Anzahl_RNAseq_microarray <- length(gene_RNAseq_micrarray)
+
+gene_RNAseq_gesammt <- signifikannte_gesammt[signifikannte_gesammt%in%signifikante_gene_RNAseq]
+Anzahl_RNAseq_gesammt <- length(gene_RNAseq_gesammt)
+
+gene_microarray_gesammt <- signifikante_gene_microarray[signifikante_gene_microarray%in%signifikannte_gesammt]
+Anzahl_microarray_gesammt <- length(gene_microarray_gesammt)
+
+gene_zusammen <- gene_microarray_gesammt[gene_microarray_gesammt%in%gene_RNAseq_gesammt]
+Anzahl_zusammen <- length(gene_zusammen)
+
+
+
+#pdf(file.path(bild.dir, "Venndiagramm.pdf"))
+grid.newpage()   
+draw.triple.venn(area1 = Anzahl_gesammt,                          
+                 area2 = Anzahhl_microarray,
+                 area3 = Anzahl_RNAseq,
+                 n12 = Anzahl_microarray_gesammt,
+                 n23 = Anzahl_RNAseq_microarray,
+                 n13 = Anzahl_RNAseq_gesammt,
+                 n123 = Anzahl_zusammen,
+                 category = c("Alle Studien", "Microarray", "RNAseq"))
+#dev.off()
+
+```
+
+
+

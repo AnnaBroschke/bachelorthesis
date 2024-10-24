@@ -1,0 +1,277 @@
+---
+title: "Differenziell Exprimierte Gene Analyse"
+author: "Anna Broschke"
+date: "25 4 2021"
+output: html_document 
+---
+
+```{r setup}
+#laden der Pfade
+source("init.R")
+
+#Eingabe aller beteiligten Studien
+studien.names <- c("GSE54456-GSE63979",
+                   "GSE67785",
+                   "GSE117239",
+                   "E-MTAB-6556",
+                   "GSE6710",#
+                   "GSE11903",
+                   "GSE14905",
+                   "GSE30999",
+                   "GSE34248",
+                   "GSE41662",
+                   "GSE41663",
+                   "GSE51440",#
+                   "GSE53552",
+                   "GSE69967",
+                   "GSE75343",
+                   "GSE106992",
+                   "GSE121212"
+                   )
+
+#liste aller files zu SE dokumenten
+se.files = file.path(se.dir,
+                     paste0(studien.names,
+                            "_final.rds"))
+
+
+```
+
+```{r  laden, eval = TRUE, include=FALSE}
+## load R functions
+source(file.path(skript.dir, "functions.R"))
+
+
+## load SE objects in list
+se.l = load.se(se.files = se.files)
+#print(se.l)
+
+```
+
+```{r downsample, eval=TRUE, include=FALSE}
+
+## extract first 100 genes (only to be used for this example!!!)
+## to reduce run time of differential expression analysis
+se.l.red = lapply(se.l, function(x) {x[1:10,]})
+
+```
+
+```{r diff_exp, warning=TRUE ,echo=TRUE, include=TRUE ,eval=FALSE}
+#run diff.ex analyse abspeichern unter res.dir
+for (i in 1:length(se.l.red)) {
+  run_diff_expr_analysis_dream(
+    se = se.l[[i]],
+    var = "biomap_lesional",
+    var.id = "biomap_id",
+    res.file = file.path(res.dir,
+                         paste0("res_diff_expr_", 
+                                names(se.l)[i],
+                                ".csv")))
+}
+```
+
+
+
+```{r diff_ex_listen}
+# erstellen der Pfade zu csv dateien der diff.ex analyse
+dif.ex.files = file.path(res.dir,
+                     paste0("res_diff_expr_",studien.names,
+                            ".csv"))
+#laden diff.ex analyse in liste
+diff.ex.l <-  load.csv(csv.files = dif.ex.files)
+
+
+```
+
+
+```{r plotten , eval=TRUE}
+#plotten von jeweils vulcanoplot und histogram adjustierter p-Werte der einzelnen Studien
+
+for (i in 1:length(dif.ex.files)) {
+  init <- par(no.readonly = TRUE)
+  
+par(mfrow = c( 1, 2), pin = c(1.7,2.3))
+  name <- names(diff.ex.l)
+              volcano.plot(diff.ex.l[[i]],
+                          name[i],
+                            log.p = TRUE, log.fc = FALSE)
+              his.plot.p(diff.ex.l[[i]], main = name[i])
+par(init)
+}
+
+
+
+```
+
+```{r tabelle}
+#erstellen Tabelle von zusammenfassung der diff.ex analyse
+tabelle.diff.ex<-summary.tabelle(diff.ex.l)
+
+
+
+
+#erstellen Tabelle info übersicht in studien
+tabelle.info <- info.studien(se.l)
+
+#Ordnen der Tabellen nach Teilnehmer
+tabelle.diff.ex$anzahltel <- tabelle.info$anz.teil
+tabelle.diff.ex <- tabelle.diff.ex[order(tabelle.diff.ex$anzahltel),]
+tabelle.diff.ex2 <- tabelle.diff.ex[,-5]
+
+tabelle.info2 <- tabelle.info[order(tabelle.info$anz.teil),]
+tabelle.info2 <- tabelle.info2[,1:5]
+
+
+#Ausgabe der Tabellen
+knitr::kable(tabelle.diff.ex2)
+xtable(tabelle.diff.ex2)
+
+knitr::kable(tabelle.info2)
+xtable(tabelle.info2)
+
+
+```
+
+
+```{r Bilderapeichern, eval=FALSE}
+
+#Studie mit den meißten Proben in bild.dir abspeichern
+#pdf(file.path(bild.dir, "vulcano_hist_gros.rnaseq.pdf"))
+for (i in 1:1) {
+  init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.8,2.5))
+  name <- names(diff.ex.l)
+              volcano.plot(diff.ex.l[[i]],
+                          name[i],
+                            log.p = TRUE, log.fc = FALSE)
+              his.plot.p(diff.ex.l[[i]], main = name[i])
+par(init)
+}
+#dev.off()
+
+##Studie mit den wenigsten proben in bild.dir abspeichern
+#png(file.path(bild.dir, "vulcano_hist_klein.png"))
+#for (i in 4:4) {
+#  init <- par(no.readonly=TRUE)
+#par(mfrow = c( 1, 2))
+#  name <- names(diff.ex.l)
+#              volcano.plot(diff.ex.l[[i]],
+#                          name[i],
+#                            log.p = TRUE, log.fc = FALSE)
+#              his.plot.p(diff.ex.l[[i]], main = name[i])
+#par(init)
+#}
+#dev.off()
+
+##Studie mit den wenigsten proben in bild.dir abspeichern
+#png(file.path(bild.dir, "vulcano_hist_gros_microarray.png"))
+#for (i in 1:1) {
+#  init <- par(no.readonly=TRUE)
+#par(mfrow = c( 1, 2))
+#  name <- names(diff.ex.l)
+#              volcano.plot(diff.ex.l[[i]],
+#                          name[i],
+#                            log.p = TRUE, log.fc = FALSE)
+#              his.plot.p(diff.ex.l[[i]], main = name[i])
+#par(init)
+#}
+#dev.off()
+
+#Studie mit den mittel proben in bild.dir abspeichern
+#pdf(file.path(bild.dir, "vulcano_hist_mittel.pdf"))
+for (i in 11:11) {
+  init <- par(no.readonly=TRUE)
+par(mfrow = c( 1, 2),pin = c(1.7,2.3))
+  name <- names(diff.ex.l)
+              volcano.plot(diff.ex.l[[i]],
+                          name[i],
+                            log.p = TRUE, log.fc = FALSE)
+              his.plot.p(diff.ex.l[[i]], main = name[i])
+par(init)
+}
+#dev.off()
+
+
+#Bild über Anteil neg logFC mit abh. technologie (Antei erst in nächstem Chunk definiert)
+#pdf(file.path(bild.dir, "FC_Studie_technologie.pdf"))
+#ggplot(Antei, mapping=aes(y=Antei.fc,x=technologie))+geom_jitter(position=position_jitter(0.2))+
+#  labs(x="Technologie",
+ #      y="Anteil logFC < 0")
+#dev.off()
+
+
+#Scatterplot anteil negativer logFC mit Technolgie (Antei erst in nächstem Chunk definiert)
+#pdf(file.path(bild.dir, "FC_Proben_technologie.pdf"))
+ggplot(Antei, mapping=aes(x=Anzahl.Poben,y=Antei.fc,col=technologie))+geom_point()+ scale_color_manual(values = c("steelblue1","indianred4"))+
+  labs(x="Anzahl der Beobachtungen",
+       y="Anteil logFC < 0",
+       col="Technologie") +
+  theme_few() 
+#dev.off()
+
+```
+
+```{r FCAnteilplot}
+
+#Erstellen Tabelle mit Anzahl der Teilnehmer und Anteil  negativ logFC 
+Antei <- data.frame(
+  Anzahl.teiln = 1:length(se.l),
+  Antei.fc = unlist(lapply(diff.ex.l, FUN = function(x){
+    anzahl_p.val. <- sum(x$logFC <= 0)}))/unlist(lapply(diff.ex.l, FUN = function(x){
+    anzahl_gene <- length(x$gene)})),
+  Anzahl.Poben= 1:length(se.l),
+  name = names(se.l),
+  technologie = tabelle.info$Technologie
+)
+
+for (i in 1:length(se.l)){
+   Antei[i,1]<-length(unique(se.l[[i]]$biomap_id))
+}
+for (i in 1:length(se.l)){
+   Antei[i,3]<-length(se.l[[i]]$biomap_id)
+}
+
+
+#Erstellen verschiedener grafiken Anzahl Studien und Anteil negativ LogFC
+png(file.path(bild.dir, "FC_Studie_Anz.teiln.png"))
+
+ggplot(Antei, aes(x=Anzahl.teiln,y=Antei.fc,col=name))+geom_point()+
+  labs(x="Anzahl der Teilnehmer",
+       y="Anteil des fold change < 0")
+dev.off()
+ggplot(Antei, mapping=aes(x=Anzahl.Poben,y=Antei.fc,col=name))+geom_point()+
+  labs(x="Anzahl der Proben",
+       y="Anteil des fold change < 0")
+ggplot(Antei, aes(x=Anzahl.teiln,y=Antei.fc,col=technologie))+geom_point()+
+  labs(x="Anzahl der Teilnehmer",
+       y="Anteil des fold change < 0")
+ggplot(Antei, mapping=aes(x=Anzahl.Poben,y=Antei.fc,col=technologie))+geom_point()+
+  labs(x="Anzahl der Proben",
+       y="Anteil logFC < 0")
+
+  
+
+```
+
+```{r mittelwerte}
+#Ermitteln in ob Beobachtungen mit negativer logFC in läsionalen oder in nicht läsionalen stärker exprimiert
+
+korrekt <- 1:length(diff.ex.l)
+
+
+for (i in 1:length(diff.ex.l)) {
+  diff.ex.l[[i]]$unterschied.means <-  diff.ex.l[[i]]$mean.nonlesional - diff.ex.l[[i]]$mean.lesional
+  diff.ex.l[[i]]$stark <- sign(diff.ex.l[[i]]$unterschied.means) == sign(diff.ex.l[[i]]$logFC)
+  #True bedeutet in lesional stärker exprimiert als in nicht läsional
+  korrekt[i] <- sum(diff.ex.l[[i]]$stark==FALSE) / (sum(diff.ex.l[[i]]$stark==FALSE)+ sum(diff.ex.l[[i]]$stark==TRUE))
+}
+
+#zum Vallidieren der Aussage die prozentualen ergebnisse der nicht in läsional stärker exprimierten Gene
+
+korrekt
+
+#heist läsional stärker expremiert als nicht lesional
+```
+
+
+

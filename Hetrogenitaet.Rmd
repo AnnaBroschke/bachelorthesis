@@ -1,0 +1,449 @@
+---
+title: "Hetrogenitaet"
+author: "Anna Broschke"
+date: "11 6 2021"
+output: html_document
+---
+
+```{r setup3 , warning=FALSE}
+#Laden der Pfade
+source("init.R")
+
+## load R functions
+source("function_heterogenitaet.R")
+
+source(file.path(skript.dir, "functions.R"))
+
+#Eingabe aller beteiligten Studien
+studien.names <- c("GSE54456-GSE63979",
+                   "GSE67785",
+                   "GSE117239",
+                   "E-MTAB-6556",
+                   "GSE6710",#
+                   "GSE11903",
+                   "GSE14905",
+                   "GSE30999",
+                   "GSE34248",
+                   "GSE41662",
+                   "GSE41663",
+                   "GSE51440",#
+                   "GSE53552",
+                   "GSE69967",
+                   "GSE75343",
+                   "GSE106992",
+                   "GSE121212"
+                   )
+
+#Studien mit der Technologie RNAseq
+rnaseq <- c("E-MTAB-6556",
+            "GSE67785",
+            "GSE121212",
+            "GSE54456-GSE63979"
+            )
+```
+
+```{r  ladenhet}
+
+#laden der diff.ex files
+dif.ex.files = file.path(res.dir,
+                     paste0("res_diff_expr_",studien.names,
+                            ".csv"))
+
+diff.ex.l <-  load.csv(csv.files = dif.ex.files)
+
+#laden der Meta-Analyse
+meta <- import(file.path(met.dir, "meta_analyse.txt"))
+meta_signifikant <- import(file.path(met.dir, "meta_analyse_signifikant.txt"))
+meta_fc <- import(file.path(met.dir, "meta_fc.txt"))
+
+```
+
+```{r downsamplehet , eval=FALSE}
+
+## extract first 100 genes (only to be used for this example!!!)
+## to reduce run time of differential expression analysis
+diff.ex.l.red = lapply(diff.ex.l, function(x) {x[1:50,]})
+
+
+
+```
+
+```{r sig_studie}
+
+# Gene aus jeder Studie die P-Wert <0.05
+signifikante_gene <- as.data.frame(sig_raus_stud(diff.ex.l,meta, meta$gene[meta$pvalue.random.adj<0.05]))
+
+#Gene aus jeder Studie mit |logFC|>1
+sig_gene_fc <- as.data.frame(sig_raus_stud(diff.ex.l,meta_fc,meta_fc$gene[meta_fc$pvalue.random.adj<0.05]))
+```
+
+```{r munkorr, eval=FALSE}
+
+#Berechnen der Unkorrelierten M-Statistik
+mstatistic <- getmstatistic(beta_in = as.numeric(signifikante_gene$logFC),
+                            lambda_se_in = as.numeric(signifikante_gene$SE),
+                            study_names_in = signifikante_gene$gene,
+                            variant_names_in = signifikante_gene$studie.name
+    
+  )
+#exportieren der entstandenen Dataframes
+m_data <- mstatistic$M_dataset
+#colnames(m_data)
+export(m_data,file = file.path(m.dir,"m_data_unkorr.csv"))
+
+m_influential_stud <- mstatistic$influential_studies_0_05
+export(m_data,file = file.path(m.dir,"m_inf_stud_unkorr.csv"))
+  
+```
+```{r munkorr2, eval=FALSE}
+
+
+  mstatistic2 <- getmstatistic(beta_in = as.numeric(signifikante_gene2$logFC),
+                            lambda_se_in = as.numeric(signifikante_gene2$SE),
+                            study_names_in = signifikante_gene2$gene,
+                            variant_names_in = signifikante_gene2$studie.name
+    
+  )
+m_data2 <- mstatistic2$M_dataset
+#colnames(m_data)
+export(m_data2,file = file.path(m.dir,"m_data_unkorr2.csv"))
+
+m_influential_stud2 <- mstatistic2$influential_studies_0_05
+export(m_influential_stud2,file = file.path(m.dir,"m_inf_stud_unkorr2.csv"))
+  
+```
+
+
+```{r import}
+
+#laden der unkorreliertn M-statistik
+
+m_data <- import(file.path(m.dir, "m_data_unkorr.csv"))
+
+m_influential_stud <- import(file.path(m.dir, "m_inf_stud_unkorr.csv"))
+
+
+
+```
+
+
+```{r zeichnenm}
+
+#hinzufügen der Technologie
+m_data$technologie <- ifelse(m_data$study_names_in%in%rnaseq,
+                             "RNAseq",
+                             "Microarrays")
+thershhold <- length(unique(m_data$variant_names_in))
+
+grenze <- qnorm(0.025/17, 0, sqrt(1/thershhold))
+#Zeichnen der unkorrelierten M-Statistik mit einfluss der Technologie
+
+#pdf(file.path(bild.dir, "M_unkorelliert.pdf"))
+ggplot(m_data, mapping=aes(y=M,x=reorder(study_names_in,M),col=technologie))+geom_point()+scale_color_manual(values = c("steelblue1","indianred4"))+theme_few() +
+  #geom_hline(yintercept=grenze)+geom_hline(yintercept=-grenze)+
+  theme(axis.text.x = element_text(size = 8)) +labs(x  = "Studien")+
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#dev.off()
+
+
+```
+
+
+
+```{r korrelationalles, eval = FALSE}
+
+#Matrix mit den Studien in den Zeilen und den Genen in den Spalten. Jede Zelle enthält die jeweilige Teststatistik (Effekt/SE) bzw. NA, wenn ein Gen in einer Studie nicht vorhanden ist.
+
+korrelations_mat <- matrix( 1:((length(diff.ex.l))*(length(meta$gene))), ncol = length(meta$gene),byrow = TRUE)
+
+for (g in 1:length(meta$gene)) {
+  for (s in 1:length(diff.ex.l)) {
+    if(meta$gene[g]%in%diff.ex.l[[s]]$gene){
+      korrelations_mat[s,g] <- diff.ex.l[[s]][diff.ex.l[[s]]$gene%in%meta$gene[g],]$logFC
+    }
+    else{
+      korrelations_mat[s,g] <- NA
+    }
+  }
+  
+}
+
+
+#korrelations_mat[1,1] <- diff.ex.l[[1]][diff.ex.l[[1]]$gene%in%meta$gene[1],]$logFC
+
+
+korrelation_ges <- cor(korrelations_mat, use = "pairwise.complete.obs")
+#zu groß für meinen Rechner, deshalb vergleinern der Daten mit großen logFC>1
+#head(korrelations_mat)
+```
+
+
+```{r korrelationfc, eval=FALSE}
+
+#Matrix mit den Studien in den Zeilen und den Genen in den Spalten. Jede Zelle enthält die jeweilige Teststatistik (Effekt/SE) bzw. NA, wenn ein Gen in einer Studie nicht vorhanden ist.
+
+korrelations_mat_fc <- matrix( 1:((length(diff.ex.l))*(length(meta_fc$gene))), ncol = length(meta_fc$gene),byrow = TRUE)
+
+for (g in 1:length(meta_fc$gene)) {
+  for (s in 1:length(diff.ex.l)) {
+    if(meta_fc$gene[g]%in%diff.ex.l[[s]]$gene){
+      korrelations_mat_fc[s,g] <- diff.ex.l[[s]][diff.ex.l[[s]]$gene%in%meta_fc$gene[g],]$logFC
+    }
+    else{
+      korrelations_mat_fc[s,g] <- NA
+    }
+  }
+  
+}
+ #dim(korrelations_mat_fc)
+
+colnames(korrelations_mat_fc) <- meta_fc$gene
+
+#length(meta_fc$gene)
+
+korrelation_fc <- cor(korrelations_mat_fc, use = "pairwise.complete.obs")
+
+#head(korrelation_fc)
+
+
+ 
+
+ #pdf(file.path(bild.dir, "Korrelation.pdf"))
+ corrplot(korrelation_fc,tl.pos = FALSE)
+#dev.off()
+ 
+```
+
+
+
+```{r korrelationsm, eval=FALSE}
+#cut<-findCorrelation( korrelation_fc, 0.2 , exact = FALSE,names = TRUE)
+#gene <- setdiff(meta$gene, cut) 
+#length(gene)
+
+m08 <- korrelation(korrelation_fc,
+                0.8,
+                meta_fc,
+                diff.ex.l,
+                anzahl_gene,
+                file.path(m.dir,"m_data_08.csv"))
+#18476 Anzahl Gene
+  
+m099 <- korrelation(korrelation_fc,
+                cutoff=0.99,
+                meta_fc,
+                diff.ex.l,
+                anzahl_gene,
+                file=file.path(m.dir,"m_data_099.csv"))
+#18 521
+  
+m07 <- korrelation(korrelation_fc,
+                cutoff=0.7,
+                meta_fc,
+                diff.ex.l,
+                anzahl_gene,
+                file=file.path(m.dir,"m_data_07.csv"))
+
+#18476
+  
+m05 <- korrelation(korrelation_fc,
+                cutoff=0.5,
+                meta_fc,
+                diff.ex.l,
+                anzahl_gene,
+                file=file.path(m.dir,"m_data_05.csv"))
+
+#18476
+  
+m02 <- korrelation(korrelation_fc,
+                cutoff=0.2,
+                meta_fc,
+                diff.ex.l,
+                anzahl_gene,
+                file=file.path(m.dir,"m_data_02.csv"))
+
+#18 476
+
+
+
+
+
+```
+
+
+
+
+```{r import08}
+
+#Laden der unkorrellierten M-Statistik
+
+m_data_08 <- import(file.path(m.dir, "m_data_08.csv"))
+m_data_099 <- import(file.path(m.dir, "m_data_099.csv"))
+m_data_07 <- import(file.path(m.dir, "m_data_07.csv"))
+m_data_05 <- import(file.path(m.dir, "m_data_05.csv"))
+m_data_02 <- import(file.path(m.dir, "m_data_02.csv"))
+
+
+```
+
+
+```{r Mzuszeichnen}
+
+
+M_zus <- rbind(m_data_08,m_data_07,m_data_05,m_data_02)
+
+
+
+
+#pdf(file.path(bild.dir, "M_zus_kleiner099.pdf"))
+ggplot(data = M_zus,
+                         mapping = aes(x = reorder(study_names_in,M),
+                                       y = M,
+                                       col = korrelation )) +
+                        labs(x  = "Studien", col="Korrelationsgrenzen")+ geom_point() +theme_few() +
+                        theme(axis.text.x = element_text(size = 8)) +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#dev.off()
+```
+```{r Mzuszeichnen99}
+
+
+M_zus99 <- rbind(m_data_099,m_data_08,m_data_07,m_data_05,m_data_02)
+
+
+#pdf(file.path(bild.dir, "M_zus_099.pdf"))
+ggplot(data = M_zus99,
+                         mapping = aes(x = reorder(study_names_in,M),
+                                       y = M,
+                                       col = korrelation )) +
+                        labs(x  = "Studien", col="Korrelationsgrenzen")+ geom_point() +
+                        theme(axis.text.x = element_text(size = 8)) +
+                        theme_few()+
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#dev.off()
+```
+
+```{r SPRE, eval =FALSE}
+
+SPRE <- getspres(beta_in = as.numeric(signifikante_gene$logFC), 
+                 se_in = as.numeric(signifikante_gene$SE), 
+                 study_names_in = signifikante_gene$studie.name, 
+                 variant_names_in = signifikante_gene$gene)
+
+
+## distribution of SPREs
+anz.gene <- SPRE$number_variants
+anz.studie <- SPRE$number_studies
+
+data_spre <- SPRE$spre_dataset
+
+export(data_spre,file = file.path(m.dir,"SPRE.csv"))
+
+
+
+```
+
+
+
+```{r ergebnisse}
+#aus chunk oben
+anz.gene <- 14266
+anz.studie <- 17
+
+#Quantil der Normalverteilung (quantil, mean, sigma)
+Schwelle <- qnorm(0.025/anz.studie, 0 , sqrt(1/anz.gene))
+
+
+data_spre <- import(file.path(m.dir, "SPRE.csv"))
+
+spre.l <- split(data_spre$spre, data_spre$study_names)
+M <- sapply(spre.l, mean, na.rm = TRUE)
+summary(M)
+sd <- sapply(spre.l, mean, na.rm = TRUE)
+summary(sd)
+
+data_spre$technologie <- ifelse(data_spre$study_names%in%rnaseq,
+                             "RNAseq",
+                             "Microarrays")
+
+#pdf(file.path(bild.dir, "SPRE_box.pdf"))
+ggplot(data_spre, aes(x= fct_reorder(study_names,spre), y= spre, fill=technologie))+geom_boxplot()+
+  geom_hline(yintercept = 0) +
+  geom_hline(yintercept = c(-Schwelle, Schwelle), 
+             linetype = "dashed")+scale_fill_manual(
+                    values = c("steelblue1","indianred4"))+theme_few()+
+  theme(axis.text.x = element_text(size = 8)) +
+                        theme(legend.position = "bottom", legend.direction="horizontal") +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x="Studien",y="SPRE")+ylim(-10,10)
+#dev.off()
+
+#pdf(file.path(bild.dir, "SPRE_viol.pdf"))
+ggplot(data_spre, aes(x= fct_reorder(study_names,spre), y= spre))+geom_violin()+
+  geom_hline(yintercept = 0) +
+  geom_hline(yintercept = c(-Schwelle, Schwelle), 
+             linetype = "dashed")+theme_few()+
+  theme(axis.text.x = element_text(size = 8)) +
+                        theme(legend.position = "bottom", legend.direction="horizontal") +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x="Studien",y="SPRE")+ylim(-10,10)
+#dev.off()
+
+```
+```{r SPREfc, eval = FALSE}
+SPREfc <- getspres(beta_in = as.numeric(sig_gene_fc$logFC), 
+                 se_in = as.numeric(sig_gene_fc$SE), 
+                 study_names_in = sig_gene_fc$studie.name, 
+                 variant_names_in = sig_gene_fc$gene)
+
+
+## distribution of SPREs
+anz.gene.fc <- SPREfc$number_variants
+anz.studie.fc <- SPREfc$number_studies
+
+data_spre.fc <- SPREfc$spre_dataset
+
+#Quantil der Normalverteilung (quantil, mean, sigma)
+Schwelle.fc <- qnorm(0.025/anz.studie.fc, 0 , sqrt(1/anz.gene.fc))
+
+
+
+
+```
+
+```{r ergebnissefc, eval=FALSE}
+spre.l.fc <- split(data_spre.fc$spre, data_spre.fc$study_names)
+Mfc <- sapply(spre.l.fc, mean, na.rm = TRUE)
+summary(Mfc)
+sd.fc <- sapply(spre.l.fc, mean, na.rm = TRUE)
+summary(sd.fc)
+
+#pdf(file.path(bild.dir, "SPRE_box_fc.pdf"))
+ggplot(data_spre.fc, aes(x= fct_reorder(study_names,spre), y= spre))+geom_boxplot()+
+  geom_hline(yintercept = 0) +
+  geom_hline(yintercept = c(-Schwelle.fc, Schwelle.fc), 
+             linetype = "dashed")+theme_few()+
+  theme(axis.text.x = element_text(size = 8)) +
+                        theme(legend.position = "bottom", legend.direction="horizontal") +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x="Studien",y="SPRE")+ylim(-10,10)
+#dev.off()
+
+
+#pdf(file.path(bild.dir, "SPRE_vol_fc.pdf"))
+ggplot(data_spre.fc, aes(x= fct_reorder(study_names,spre), y= spre))+geom_violin()+
+  geom_hline(yintercept = 0) +
+  geom_hline(yintercept = c(-Schwelle.fc, Schwelle.fc), 
+             linetype = "dashed")+theme_few()+
+  theme(axis.text.x = element_text(size = 8)) +
+                        theme(legend.position = "bottom", legend.direction="horizontal") +
+                        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x="Studien",y="SPRE")+ylim(-10,10)
+#dev.off()
+
+
+
+```
+
+
+

@@ -1,0 +1,22 @@
+---
+title: "Bachellorarbeit"
+author: "Anna Broschke"
+date: "3 5 2021"
+output: html_document
+---
+
+```{r child = "diff_expr.Rmd", eval = TRUE}
+
+```
+
+```{r child = "Meta-Analyse.Rmd", eval = TRUE}
+
+```
+
+```{r child = "Hetrogenitaet.Rmd", eval = TRUE}
+
+```
+
+```{r child = "Metaanalyse_extra.Rmd", eval = TRUE}
+
+```
